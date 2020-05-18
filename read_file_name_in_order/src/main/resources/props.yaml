@@ -1,0 +1,4 @@
+POC:
+  inboundDir: 'E:\Fleetcor\POC\inbound'
+  inboundFilePattern: '*.txt'
+  outboundDir: 'E:\Fleetcor\POC\outbound'

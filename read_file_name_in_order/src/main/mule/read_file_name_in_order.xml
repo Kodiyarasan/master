@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd">
+<configuration-properties file="props.yaml"/>
+	<file:config name="File_Config" doc:name="File Config" doc:id="c847f6c0-26e8-4140-b695-53ee5ca85c20" />
+	<flow name="read_file_name_in_orderFlow" doc:id="2748cbc6-4e4e-49aa-9242-dd2f7439c9fd" >
+		<scheduler doc:name="Scheduler" doc:id="e4b55526-024a-4cb2-9e7e-292a18579387" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="10" timeUnit="MINUTES"/>
+			</scheduling-strategy>
+		</scheduler>
+		<logger level="INFO" doc:name="Logger" doc:id="a8165710-f5b3-4cde-a8b6-605b1375c92d" message="flow is triggered"/>
+		<file:list doc:name="List" doc:id="8987b071-cdfc-48c4-8a2d-e299a7471b6e" directoryPath="${POC.inboundDir}">
+			<file:matcher filenamePattern="${POC.inboundFilePattern}" />
+		</file:list>
+				<ee:transform doc:name="Transform Message" doc:id="ac4b7bbf-02f1-49ee-8475-7b70c0d93acd">
+			<ee:variables>
+				<ee:set-variable variableName="sourceFileNames" ><![CDATA[%dw 2.0
+output application/java
+---
+
+	 payload.attributes.fileName
+]]></ee:set-variable>
+				<ee:set-variable variableName="sourceFilePath" ><![CDATA[%dw 2.0
+output application/java
+---
+
+	 payload.attributes.path]]></ee:set-variable>
+			
+</ee:variables>
+		</ee:transform>
+		<choice doc:name="Choice" doc:id="5dbdc309-a730-45b1-b183-bdce2fcc4ead" >
+			<when expression="#[vars.sourceFilePath != null and (sizeOf (vars.sourceFilePath)) &gt; 0]">
+				<flow-ref doc:name="Flow Reference" doc:id="c56efbca-4a1a-45f2-8fb4-7c83365f5b85" name="filePresent"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="1356f2ac-a60b-4ef6-aa8e-0162f575a152" message="There is  no file in Source for DX300C at: #[now()]"/>
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="filePresent" >
+	<logger level="INFO" doc:name="Logger" doc:id="a7d118c6-a2a2-436f-b996-e0f5b8caee29" message="files before ordering #[vars.sourceFilePath]"/>
+		<ee:transform doc:name="Transform Message" doc:id="3c66c514-ddb1-4939-b79c-00ea49d2044a" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+var fileNames=vars.sourceFilePath
+---
+
+	fileNames orderBy($)
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="8d74bcaf-083b-4867-8690-dc731402c582" message="files after sorting #[payload]"/>
+		<foreach doc:name="For Each" doc:id="693876b7-b9dd-44fb-b1c7-5136d5e076db" collection="#[payload]">
+			<ee:transform doc:name="Transform Message" doc:id="45e9cc4b-2d63-4c77-8631-82ab7905bc52" >
+				
+				<ee:variables >
+					<ee:set-variable variableName="sourceFileName" ><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<file:read doc:name="Read" doc:id="161be267-0a16-46d4-9b9f-a82fd8ba5346" config-ref="File_Config" path="#[vars.sourceFileName]"  outputEncoding="UTF-16LE"/>
+			<file:write doc:name="Write" doc:id="228b6830-4de9-4712-9ae3-a7ed691cc214" path="#[%dw 2.0
+import * from dw::Runtime
+output application/java
+var filePath = vars.sourceFileName as String splitBy (/[\\]/)
+---
+p('POC.outboundDir') as String ++ '\\' ++ filePath[-1] as String wait 5000]"/>
+		</foreach>
+	
+</flow>
+	
+</mule>
